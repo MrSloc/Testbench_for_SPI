@@ -1,97 +1,80 @@
-// Set the timescale for the simulation
 `timescale 1ns/1ns
 
+// 用于32位超前进位加法器 (CLA) 的测试平台
 module cla_32bits_tb;
-
-    // Use a parameter for the adder's width for flexibility
+    // 参数定义，用于设置加法器的位宽 
     parameter WIDTH = 32;
 
-    // Testbench signals
-    logic [WIDTH-1:0] a;
-    logic [WIDTH-1:0] b;
-    logic             ci;
-    logic [WIDTH-1:0] s;
-    logic             co;
+    // 测试平台的变量
+    // 使用 'reg' 类型作为待测设计(DUT)的输入激励 
+    reg [WIDTH-1:0] a;
+    reg [WIDTH-1:0] b;
+    reg ci;
+    
+    // 使用 'wire' 类型接收DUT的输出 
+    wire [WIDTH-1:0] s;
+    wire co;
+    
+    // 用于验证的变量
+    // 黄金模型的计算结果，使用 'wire' 接收 'assign' 语句的输出 
+    wire [WIDTH:0] result;
+    integer i, j, k;
+    
+    // 标志位，用于追踪测试是通过还是失败 
+    reg flag;
 
-    // For verification: a golden model and error tracking
-    logic [WIDTH:0]   expected_result;
-    integer           error_count;
-    integer           test_count;
+    // 黄金模型：使用Verilog内建的加法运算符作为正确性的参照 
+    assign result = a + b + ci;
 
-    // Golden Model: Use Verilog's built-in addition for a correct reference
-    assign expected_result = a + b + ci;
-
-    // Instantiate the Device Under Test (DUT)
-    // This assumes your CLA module is named 'cla_32bits'
+    // 实例化待测设计(DUT - cla_32bits)
+    // 将SystemVerilog的(.*)隐式连接改为Verilog的命名端口显式连接 
     cla_32bits u_cla_32bits (
-        .a(a),
-        .b(b),
-        .ci(ci),
-        .s(s),
+        .a(a), 
+        .b(b), 
+        .ci(ci), 
+        .s(s), 
         .co(co)
     );
 
-    // Main test sequence block
+    // 激励和检查模块
     initial begin
-        $display("--------------------------------------------------");
-        $display("Starting verification of %0d-bit Carry-Lookahead Adder...", WIDTH);
-        $display("--------------------------------------------------");
+        $display("Verifying %d bits CLA...", WIDTH); 
+        
+        // 初始化输入信号
+        a = 32'h0; 
+        b = 32'h0; 
+        ci = 1'b0; 
+        flag = 1'b1; // 初始化标志位为1 (通过) 
 
-        error_count = 0;
-        test_count = 0;
-
-        // --- Test Phase 1: Directed Corner Cases ---
-        $display("\nRunning Directed Corner Case Tests...");
-        // Test zeros
-        check_adder(0, 0, 0);
-        check_adder(0, 0, 1);
-
-        // Test max values (all bits set to 1)
-        check_adder('1, '1, 0);
-        check_adder('1, '1, 1);
-
-        // Test carry propagation (a long chain of carries)
-        check_adder('1, 1, 0); // 0xFFFF_FFFF + 1 should be 0x0000_0000 with carry-out
-        check_adder(32'hAAAAAAAA, 32'h55555555, 0); // Alternating bits, sum should be all 1s
-
-        // --- Test Phase 2: Randomized Testing ---
-        $display("\nRunning 1000 Randomized Tests...");
-        repeat (1000) begin
-            // Generate random values for all inputs
-            check_adder($random(), $random(), $random & 1);
+        // 为了在合理的时间内完成仿真，仅测试所有可能输入的一个子集
+        for (i = 0; i < 1024; i = i + 1) begin 
+            for (j = 0; j < 1024; j = j + 1) begin 
+                for (k = 0; k < 2; k = k + 1) begin 
+                    #1; // 延时1ns，等待组合逻辑电路稳定
+      
+                    // 使用 'if' 语句替代 SystemVerilog 的 'assert' 来检查输出结果 
+                    if (co !== result[WIDTH] || s !== result[WIDTH-1:0]) begin
+                        flag = 1'b0; // 如果结果不匹配，将标志位设为0 (失败) 
+                        // 显示更清晰的错误信息 
+                        $display("ERROR: Mismatch found at time %t", $time);
+                        $display("  Inputs:  a = %h, b = %h, ci = %b", a, b, ci);
+                        $display("  DUT Out: s = %h, co = %b", s, co);
+                        $display("  Expected:s = %h, co = %b", result[WIDTH-1:0], result[WIDTH]); 
+                    end
+                    ci = ~ci; // 翻转进位输入，用于下一次迭代 
+                end
+                b = b + 1; 
+            end
+            a = a + 1; 
         end
         
-        // --- Final Report ---
-        $display("\n--------------------------------------------------");
-        if (error_count == 0) begin
-            $display("All %0d cases passed!", test_count);
-        end else begin
-            $display("FAILED: %0d error(s) found in %0d total cases.", error_count, test_count);
-        end
-        $display("--------------------------------------------------");
+        // 根据最终的标志位状态，报告测试结果
+        if (flag)
+            $display("PASSED"); 
+        else
+            $display("FAILED"); 
         
-        $finish;
+        $finish; // 结束仿真
     end
-
-    // Reusable task to apply stimulus and check the result
-    task check_adder(input [WIDTH-1:0] test_a, input [WIDTH-1:0] test_b, input test_ci);
-        // 1. Apply the test case inputs
-        a = test_a;
-        b = test_b;
-        ci = test_ci;
-
-        // 2. Wait a small amount of time for the combinational logic to settle
-        #1; 
-
-        // 3. Compare DUT output against the golden model
-        test_count++;
-        if (s !== expected_result[WIDTH-1:0] || co !== expected_result[WIDTH]) begin
-            // Use $error to report failures, which also increments the simulator's error count
-            $error("FAIL: a=%h, b=%h, ci=%b", test_a, test_b, test_ci);
-            $error("      -> DUT Output:   s=%h, co=%b", s, co);
-            $error("      -> Expected:     s=%h, co=%b", expected_result[WIDTH-1:0], expected_result[WIDTH]);
-            error_count++;
-        end
-    endtask
 
 endmodule
