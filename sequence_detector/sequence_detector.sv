@@ -44,3 +44,7 @@ module sequence_detector (
     input  [2:0]  data,
     output reg    sequence_found
 );
+
+// Inster Generated Codes
+    
+endmodule
