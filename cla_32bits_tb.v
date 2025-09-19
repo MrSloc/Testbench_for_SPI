@@ -77,4 +77,10 @@ module cla_32bits_tb;
         $finish; // 结束仿真
     end
 
+    // 生成波形文件以便后续查看
+    initial begin
+        $dumpfile("cla_32bits.vcd");
+        $dumpvars(0, cla_32bits_tb);
+    end
+
 endmodule
