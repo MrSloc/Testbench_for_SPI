@@ -4,7 +4,7 @@
         "name": "top_module",
         "testbench": "./binary_to_bcd_tb.sv",
 				"model_family": "Gemini",
-				"model_id": "gemini-2.5-pro",
+				"model_id": "gemini-1.5-flash-latest",
 				"num_candidates": 5,
 				"iterations": 5,
         "outdir": "outputs_binary_to_bcd",
